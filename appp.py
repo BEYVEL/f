@@ -1,7 +1,6 @@
 """
 Complete RAG Chat Application for Streamlit
-Based on the Russian National AI Strategy document
-Single file - just copy and deploy!
+Fixed version - no duplicate keys
 """
 
 import streamlit as st
@@ -63,15 +62,12 @@ st.markdown("""
         border-top: 1px solid #ddd;
     }
     
-    .example-button {
-        margin: 0.2rem;
-    }
-    
     .stButton button {
         width: 100%;
         background-color: white;
         border: 1px solid #1E88E5;
         color: #1E88E5;
+        margin-bottom: 0.5rem;
     }
     
     .stButton button:hover {
@@ -113,8 +109,6 @@ class DocumentProcessor:
             
             if current_num and current_article:
                 self.articles[current_num] = current_article.strip()
-            
-            st.sidebar.success(f"✅ Загружено {len(self.articles)} статей")
             
         except Exception as e:
             st.error(f"❌ Ошибка загрузки документа: {e}")
@@ -203,7 +197,8 @@ class HuggingFaceLLM:
 1. Отвечай ТОЛЬКО на русском языке
 2. Используй информацию из предоставленного контекста
 3. Формулируй ответы СВОИМИ СЛОВАМИ
-4. Если информации нет в контексте, скажи об этом честно
+4. Всегда указывай, из каких статей взята информация
+5. Если информации нет в контексте, скажи об этом честно
 
 КОНТЕКСТ ИЗ ДОКУМЕНТА:
 {context}
@@ -219,7 +214,7 @@ class HuggingFaceLLM:
                 json={
                     "inputs": prompt,
                     "parameters": {
-                        "max_new_tokens": 400,
+                        "max_new_tokens": 500,
                         "temperature": 0.3,
                         "top_p": 0.95,
                         "do_sample": True,
@@ -252,7 +247,8 @@ class ChatManager:
         if "messages" not in st.session_state:
             st.session_state.messages = []
         if "processor" not in st.session_state:
-            st.session_state.processor = DocumentProcessor(DOCUMENT_FILE)
+            with st.spinner("🔄 Загрузка документа..."):
+                st.session_state.processor = DocumentProcessor(DOCUMENT_FILE)
         if "llm" not in st.session_state:
             st.session_state.llm = HuggingFaceLLM(HUGGINGFACE_API_KEY)
     
@@ -296,9 +292,9 @@ def render_sidebar():
         st.markdown("### 📚 О документе")
         st.markdown("""
         **Национальная стратегия развития ИИ**
-        - Утверждена: 2030 год
+        - Утверждена: до 2030 года
         - Изменения: 2024 г.
-        - Статей: 50+
+        - Всего статей: 50+
         """)
         
         st.markdown("### 💡 Примеры вопросов")
@@ -308,16 +304,22 @@ def render_sidebar():
             "Что такое искусственный интеллект?",
             "Что такое большие фундаментальные модели?",
             "Какие цели развития ИИ?",
-            "Что такое доверенные технологии?"
+            "Что такое доверенные технологии?",
+            "Какие принципы развития ИИ?"
         ]
         
-        for example in examples:
-            if st.button(example, key=f"btn_{example[:10]}"):
-                st.session_state.current_question = example
+        # Create a unique key for each button based on its text
+        for i, example in enumerate(examples):
+            button_key = f"example_btn_{i}_{example[:10].replace(' ', '_')}"
+            if st.button(example, key=button_key):
+                st.session_state.question_input = example
+                st.rerun()
         
-        st.markdown("### 🔑 Статус API")
+        st.markdown("---")
+        st.markdown("### 🔑 Статус")
+        
         if HUGGINGFACE_API_KEY.startswith('hf_'):
-            st.success("✅ Hugging Face API готов")
+            st.success("✅ API подключен")
         else:
             st.error("❌ API ключ не найден")
         
@@ -335,9 +337,9 @@ def render_chat():
         st.session_state.chat = ChatManager()
     
     # Handle preset questions from sidebar
-    if hasattr(st.session_state, 'current_question'):
-        question = st.session_state.current_question
-        delattr(st.session_state, 'current_question')
+    if 'question_input' in st.session_state and st.session_state.question_input:
+        question = st.session_state.question_input
+        st.session_state.question_input = None  # Clear it
         
         # Add user message
         st.session_state.chat.add_message("user", question)
@@ -350,9 +352,7 @@ def render_chat():
         st.rerun()
     
     # Display chat history
-    for message in st.session_state.chat.messages:
-        role_class = "user-message" if message["role"] == "user" else "assistant-message"
-        
+    for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             if message["role"] == "assistant":
                 st.markdown(message["content"], unsafe_allow_html=True)
@@ -363,8 +363,6 @@ def render_chat():
     if prompt := st.chat_input("Задайте вопрос о стратегии..."):
         # Add user message
         st.session_state.chat.add_message("user", prompt)
-        with st.chat_message("user"):
-            st.markdown(prompt)
         
         # Get and add assistant message
         with st.chat_message("assistant"):
@@ -372,7 +370,6 @@ def render_chat():
                 response = st.session_state.chat.get_response(prompt)
                 st.markdown(response, unsafe_allow_html=True)
         
-        st.session_state.chat.add_message("assistant", response)
         st.rerun()
 
 # ==================== MAIN ====================
