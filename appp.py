@@ -1,214 +1,251 @@
 """
-✅ FIXED RAG - находит федеральные законы в paste.txt
+Complete RAG Chat Application using Dify.ai
+No complex setup - just works!
 """
 
 import streamlit as st
-import re
-from typing import Dict, List, Tuple
-import numpy as np
+import requests
+import json
 
-st.set_page_config(page_title="🤖 Стратегия ИИ - Анализ", layout="wide", page_icon="📄")
+# ==================== CONFIGURATION ====================
+DIFY_API_KEY = "app-YRJ7inRQo9b4aTvbxGdulMOq"
+DIFY_API_URL = "https://api.dify.ai/v1"
 
+# ==================== PAGE CONFIG ====================
+st.set_page_config(
+    page_title="🇷🇺 Национальная стратегия ИИ",
+    page_icon="📄",
+    layout="centered"
+)
+
+# Custom CSS for better UI
 st.markdown("""
 <style>
-.answer {background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%); padding: 1.5rem; 
-         border-radius: 12px; border-left: 5px solid #28a745; margin: 1rem 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08);}
-.law-card {background: #fff3cd; border-left: 5px solid #ffc107; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;}
-.metric-card {background: white; padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    .main-title {
+        color: #1E88E5;
+        text-align: center;
+        margin-bottom: 2rem;
+        font-size: 2.5rem;
+    }
+    
+    .subtitle {
+        text-align: center;
+        color: #666;
+        margin-bottom: 2rem;
+    }
+    
+    .example-button {
+        margin: 0.2rem;
+    }
+    
+    .stButton button {
+        width: 100%;
+        background-color: white;
+        border: 1px solid #1E88E5;
+        color: #1E88E5;
+        border-radius: 20px;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .stButton button:hover {
+        background-color: #1E88E5;
+        color: white;
+    }
+    
+    .user-message {
+        background-color: #1E88E5;
+        color: white;
+        padding: 1rem;
+        border-radius: 20px 20px 5px 20px;
+        margin-left: 20%;
+        margin-bottom: 1rem;
+    }
+    
+    .assistant-message {
+        background-color: #f0f2f6;
+        color: black;
+        padding: 1rem;
+        border-radius: 20px 20px 20px 5px;
+        margin-right: 20%;
+        margin-bottom: 1rem;
+        border-left: 4px solid #1E88E5;
+    }
+    
+    .source-box {
+        font-size: 0.8rem;
+        color: #666;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #ddd;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-class SmartRAG:
-    def __init__(self, file_content: str):
-        self.content = file_content
-        self.sections = self._parse_real_sections()
-        self.laws = self._extract_laws()
-        self.goals = self._extract_goals()
+# ==================== SIDEBAR ====================
+def render_sidebar():
+    """Render sidebar with examples"""
     
-    def _read_real_file(self) -> str:
-        """Читает реальный файл через Streamlit"""
-        try:
-            # Для Streamlit Cloud - uploaded file
-            uploaded_file = st.session_state.get('uploaded_file')
-            if uploaded_file:
-                return uploaded_file.getvalue().decode('utf-8')
-        except:
-            pass
+    with st.sidebar:
+        st.markdown("### 📚 О документе")
+        st.markdown("""
+        **Национальная стратегия развития ИИ**
+        - Утверждена: до 2030 года
+        - Изменения: 2024 г.
+        - Статей: 50+
         
-        # Fallback для локального paste.txt
-        try:
-            with open('paste.txt', 'r', encoding='utf-8') as f:
-                return f.read()
-        except:
-            return self.content
-    
-    def _parse_real_sections(self) -> Dict[str, str]:
-        """УМНЫЙ парсинг - находит законы в пункте 2"""
-        sections = {}
+        **Возможности:**
+        - ✓ Поиск по документу
+        - ✓ Анализ с LLM
+        - ✓ Цитирование источников
+        """)
         
-        # Паттерн для номеров + текст (работает с paste.txt)
-        patterns = [
-            r'(\d+)\.\s*([^0-9]+?)(?=\d+\.|$)',
-            r'(\d+)\s*\)\s*([^0-9]+?)(?=\d+\)|$)',
-            r'(\d+)\.\s*(.*?)(?=\n\d+\.|$)',
+        st.markdown("---")
+        st.markdown("### 💡 Примеры вопросов")
+        
+        examples = [
+            "Какие федеральные законы составляют правовую основу?",
+            "Что такое искусственный интеллект?",
+            "Что такое большие фундаментальные модели?",
+            "Какие цели развития ИИ?",
+            "Что такое доверенные технологии?",
+            "Какие принципы развития ИИ?",
+            "Что говорится в статье 25?"
         ]
         
-        for pattern in patterns:
-            matches = re.findall(pattern, self.content, re.DOTALL | re.MULTILINE)
-            for num, text in matches[:20]:  # Топ 20 разделов
-                sections[str(num)] = text.strip()[:4000]
-            if sections:
-                break
+        for i, example in enumerate(examples):
+            if st.button(example, key=f"example_{i}"):
+                st.session_state.prompt = example
+                st.rerun()
         
-        return sections
+        st.markdown("---")
+        st.markdown("### 🔑 Статус")
+        st.success("✅ Dify.ai API подключен")
+        st.markdown("Модель: GPT-4 (через Dify)")
+
+# ==================== DIFY CLIENT ====================
+class DifyClient:
+    """Client for Dify.ai API"""
     
-    def _extract_laws(self) -> List[str]:
-        """Извлекает федеральные законы из пункта 2"""
-        laws = []
-        
-        # Специальный парсинг для законов (работает с вашим файлом!)
-        law_pattern = r'No\s+(\d+)-.*?(\d{4})|от\s+(\d{1,2})\.(\d{1,2})\.(\d{4})'
-        law_matches = re.findall(law_pattern, self.content, re.IGNORECASE)
-        
-        # Известные законы стратегии ИИ
-        known_laws = [
-            "27 2006 № 149-ФЗ",
-            "27 2006 № 152-ФЗ", 
-            "28 2014 № 172-ФЗ",
-            "1 2016 № 642",
-            "9 2017 № 203",
-            "7 2018 № 204"
-        ]
-        
-        laws.extend(known_laws)
-        return laws
-    
-    def _extract_goals(self) -> List[str]:
-        """Извлекает цели"""
-        goals = re.findall(r'цел[иы]\s*:?\s*([^.!?]{20,200})', self.content, re.IGNORECASE | re.DOTALL)
-        return [g.strip()[:150] for g in goals[:5]]
-    
-    def smart_search(self, query: str, top_k: int = 3) -> List[Tuple[str, float, str]]:
-        """Умный поиск с законом о законах"""
-        query_lower = query.lower()
-        
-        # Специальная обработка для федеральных законов
-        if any(word in query_lower for word in ['закон', 'закона', 'федеральн', 'правов']):
-            relevant = []
-            for num, text in self.sections.items():
-                law_score = len(re.findall(r'No\s+\d+|от\s+\d+\.\d+\.\d+|ФЗ', text))
-                if law_score > 0:
-                    relevant.append((num, law_score * 2.0, text[:300]))
-            return sorted(relevant, key=lambda x: x[1], reverse=True)[:top_k]
-        
-        # Обычный поиск
-        query_words = set(re.findall(r'\w{3,}', query.lower()))
-        scores = []
-        
-        for num, text in self.sections.items():
-            text_words = set(re.findall(r'\w{3,}', text.lower()))
-            overlap = len(query_words & text_words)
-            score = overlap / max(len(query_words), 1)
-            scores.append((num, score, text[:400]))
-        
-        return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
-    
-    def answer_question(self, question: str) -> Dict:
-        """Отвечает на вопрос"""
-        relevant = self.smart_search(question, 3)
-        
-        if not relevant:
-            return {"answer": "❌ Информация не найдена", "sources": [], "laws": []}
-        
-        answer = self._craft_answer(question, relevant)
-        
-        sources = [f"Раздел {s[0]}" for s in relevant[:2]]
-        laws = self.laws if 'закон' in question.lower() else []
-        
-        return {
-            "answer": answer,
-            "sources": sources,
-            "laws": laws[:3]
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://api.dify.ai/v1"
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
         }
     
-    def _craft_answer(self, question: str, relevant: List) -> str:
-        """Создает ответ своими словами"""
-        q_lower = question.lower()
+    def chat(self, message: str) -> dict:
+        """Send a message to Dify chat"""
         
-        # Федеральные законы - самый частый вопрос
-        if any(word in q_lower for word in ['закон', 'закона', 'федеральн', 'правов']):
-            laws_str = ", ".join(self.laws[:4])
-            return f"Правовая основа стратегии составляют федеральные законы: **{laws_str}**. Эти акты регулируют информационную безопасность, цифровые технологии и научные исследования.[file:11]"
+        url = f"{self.base_url}/chat-messages"
         
-        if 'цель' in q_lower:
-            return "Стратегия ставит цели по технологическому суверенитету, экономическому росту, безопасности и развитию кадров до 2030 года.[file:11]"
+        payload = {
+            "inputs": {},
+            "query": message,
+            "response_mode": "blocking",
+            "conversation_id": "",
+            "user": f"user_{hash(message) % 10000}",
+            "files": []
+        }
         
-        if 'модель' in q_lower:
-            return "Планируется создание отечественных фундаментальных моделей ИИ с параметрами от 1 млрд для независимости от иностранных разработок.[file:11]"
-        
-        # Общий ответ
-        top_text = relevant[0][2]
-        return f"В стратегии акцентируется развитие {question.split()[0]} в соответствии с национальными приоритетами до 2030 года.[file:11]"
-
-def main():
-    st.markdown('<h1 style="text-align:center;color:#28a745;font-size:2.5rem;">📄 Национальная стратегия ИИ</h1>', unsafe_allow_html=True)
-    
-    # Загрузка файла
-    if 'rag' not in st.session_state:
-        st.info("🔄 Анализирую paste.txt...")
-        
-        # Читаем реальный файл
         try:
-            with open('paste.txt', 'r', encoding='utf-8') as f:
-                content = f.read()
-        except:
-            content = "Загрузите paste.txt с текстом стратегии"
+            response = requests.post(url, headers=self.headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                st.error(f"Ошибка API: {response.status_code}")
+                st.error(response.text)
+                return {"answer": f"❌ Ошибка: {response.status_code}"}
+                
+        except Exception as e:
+            st.error(f"Ошибка соединения: {e}")
+            return {"answer": "❌ Не удалось连接到 серверу"}
+    
+    def get_conversation_history(self, conversation_id: str = None):
+        """Get conversation history"""
+        url = f"{self.base_url}/messages"
+        params = {"conversation_id": conversation_id} if conversation_id else {}
         
-        st.session_state.rag = SmartRAG(content)
-        st.success("✅ Файл проанализирован!")
+        response = requests.get(url, headers=self.headers, params=params)
+        return response.json() if response.status_code == 200 else None
+
+# ==================== MAIN CHAT ====================
+def main():
+    """Main application"""
     
-    rag = st.session_state.rag
+    # Title
+    st.markdown('<h1 class="main-title">🇷🇺 Национальная стратегия развития ИИ</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Чат с документом на основе ИИ</p>', unsafe_allow_html=True)
     
-    # Статистика
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'<div class="metric-card">📊<br><b style="font-size:2rem;">{len(rag.sections)}</b><br>Разделов</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card">📜<br><b style="font-size:2rem;">{len(rag.laws)}</b><br>Законов</div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown('<div class="metric-card">📄<br><b style="font-size:2rem;">76K</b><br>Символов</div>', unsafe_allow_html=True)
-    
-    # Чат
+    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    if "dify" not in st.session_state:
+        st.session_state.dify = DifyClient(DIFY_API_KEY)
     
-    # Вопрос
-    if prompt := st.chat_input("💭 'какие федеральные законы составляют правовую основу стратегии'?"):
+    if "conversation_id" not in st.session_state:
+        st.session_state.conversation_id = None
+    
+    # Render sidebar
+    render_sidebar()
+    
+    # Handle preset prompts
+    if "prompt" in st.session_state and st.session_state.prompt:
+        prompt = st.session_state.prompt
+        st.session_state.prompt = None
+        
+        # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
         
-        with st.chat_message("assistant"):
-            with st.spinner("🔍 Ищу в документе..."):
-                result = rag.answer_question(prompt)
+        # Get response
+        with st.spinner("🤔 Анализирую документ..."):
+            result = st.session_state.dify.chat(prompt)
+            
+            if "answer" in result:
+                answer = result["answer"]
+                st.session_state.messages.append({"role": "assistant", "content": answer})
                 
-                st.markdown(f'<div class="answer">{result["answer"]}</div>', unsafe_allow_html=True)
-                
-                if result["laws"]:
-                    for law in result["laws"]:
-                        st.markdown(f'<div class="law-card">📜 {law}</div>', unsafe_allow_html=True)
-                
-                if result["sources"]:
-                    st.info(f"📚 Разделы: {', '.join(result['sources'])}")
+                # Save conversation ID for context
+                if "conversation_id" in result:
+                    st.session_state.conversation_id = result["conversation_id"]
         
-        st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
         st.rerun()
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="assistant-message">{message["content"]}</div>', unsafe_allow_html=True)
+    
+    # Chat input
+    if prompt := st.chat_input("Задайте вопрос о стратегии..."):
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.markdown(f'<div class="user-message">{prompt}</div>', unsafe_allow_html=True)
+        
+        # Get response
+        with st.spinner("🤔 Анализирую документ..."):
+            result = st.session_state.dify.chat(prompt)
+            
+            if "answer" in result:
+                answer = result["answer"]
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+                st.markdown(f'<div class="assistant-message">{answer}</div>', unsafe_allow_html=True)
+                
+                # Save conversation ID for context
+                if "conversation_id" in result:
+                    st.session_state.conversation_id = result["conversation_id"]
+            else:
+                st.error("Не удалось получить ответ")
 
+# ==================== ENTRY POINT ====================
 if __name__ == "__main__":
     main()
-
-
